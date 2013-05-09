@@ -28,6 +28,8 @@
 #define FIELD_MOTOR_3        4
 #define FIELD_CAMERA_DOWN    5
 #define FIELD_CAMERA_FRONT   6
+#define FIELD_BODY           7
+#define FIELD_TARGET         8
 
 // Our custom data is stored in the same format as the V-REP plug-in
 // tutorial:
@@ -44,14 +46,6 @@ typedef std::vector<uint8_t> byte_vector;
 
 // Mapping of field IDs to their data.
 typedef std::map<uint32_t, byte_vector> CustomData;
-
-// Print an object's ID and name to stderr for debugging.
-static void printObj(int obj)
-{
-  simChar *name = simGetObjectName(obj);
-  fprintf(stderr, "id %u name '%s'", obj, name);
-  simReleaseBuffer(name);
-}
 
 // Read a little endian integer from an iterator.  If the distance
 // between "start" and "end" is too small, this throws an exception.
@@ -100,10 +94,7 @@ static bool hasCustomDataField(int obj, uint32_t field)
   simGetObjectCustomData(obj, DATA_ID, (simChar *)&buf[0]);
   CustomData data(parseCustomData(buf));
 
-  if (data.find(field) != data.end())
-    return true;
-
-  return false;
+  return data.find(field) != data.end();
 }
 
 // Search an object tree for an object that has the specified custom
@@ -194,16 +185,22 @@ static bool writeCameraPPM(const std::string& filename, int obj)
 Quadcopter::Quadcopter(int obj)
   : m_obj(obj)
 {
+  simGetObjectUniqueIdentifier(obj, &m_uniqueID);
+
+  m_body        = searchCustomDataField(obj, FIELD_BODY);
+  m_target      = searchCustomDataField(obj, FIELD_TARGET);
+  m_cameraDown  = searchCustomDataField(obj, FIELD_CAMERA_DOWN);
+  m_cameraFront = searchCustomDataField(obj, FIELD_CAMERA_FRONT);
+
   m_motors[0]   = searchCustomDataField(obj, FIELD_MOTOR_0);
   m_motors[1]   = searchCustomDataField(obj, FIELD_MOTOR_1);
   m_motors[2]   = searchCustomDataField(obj, FIELD_MOTOR_2);
   m_motors[3]   = searchCustomDataField(obj, FIELD_MOTOR_3);
 
-  m_cameraDown  = searchCustomDataField(obj, FIELD_CAMERA_DOWN);
-  m_cameraFront = searchCustomDataField(obj, FIELD_CAMERA_FRONT);
-
-  fprintf(stderr, "--- Found Quadcopter:\n");
+  fprintf(stderr, "--- Found Quadcopter %d:\n", m_uniqueID);
   printObjWithLabel("Quadcopter:", m_obj);
+  printObjWithLabel("Body:",       m_body);
+  printObjWithLabel("Target:",     m_target);
   printObjWithLabel("Motor #1:",   m_motors[0]);
   printObjWithLabel("Motor #2:",   m_motors[1]);
   printObjWithLabel("Motor #3:",   m_motors[2]);
@@ -215,15 +212,34 @@ Quadcopter::Quadcopter(int obj)
 void Quadcopter::simulationStarted()
 {
   m_last_save_time = 0;
+  m_cumul          = 0.0f;
+  m_lastE          = 0.0f;
+  m_pAlphaE        = 0.0f;
+  m_pBetaE         = 0.0f;
+  m_psp0           = 0.0f;
+  m_psp1           = 0.0f;
+  m_prevEuler      = 0.0f;
 }
 
 void Quadcopter::simulationStopped()
 {
 }
 
-#if 0
-// XXX this doesn't work, we get the parameters back as strings
-float Quadcopter::getMotorParticleVelocity(int n)
+void Quadcopter::setMotorParticleVelocity(int n, float v)
+{
+  if (n < 0 || n > 3)
+    return;
+
+  int script = simGetScriptAssociatedWithObject(m_motors[n]);
+  if (script == -1)
+    return;
+
+  std::string s(std::to_string(v));
+  simSetScriptSimulationParameter(
+    script, "particleVelocity", &s[0], s.size());
+}
+
+float Quadcopter::getMotorParticleVelocity(int n) const
 {
   if (n < 0 || n > 3)
     return 0.0f;
@@ -241,20 +257,103 @@ float Quadcopter::getMotorParticleVelocity(int n)
     script, "particleVelocity", &size);
 
   if (r != NULL) {
-    fprintf(stderr, "got %d bytes of data: '%s'\n", size, r);
-    // result = *((float *)r);
+    std::string s(r);
     simReleaseBuffer(r);
+    result = std::stof(s);
   } else {
     fprintf(stderr, "getting motor velocity failed\n");
   }
 
   return result;
 }
-#endif
+
+// Error checking macro for "pidControl".  This wraps calls to the
+// V-REP API functions and prints an error message and returns from
+// the current function if an error occurs.
+#define CHECK(expr)                               \
+  do {                                            \
+    if ((expr) == -1) {                           \
+      fprintf(stderr, "%s:%d: %s failed\n",       \
+              __FILE__, __LINE__, # expr);        \
+      return;                                     \
+    }                                             \
+  } while (0)
+
+// Ported PID control from the Lua script.  Follows the quadcopter
+// target object.
+void Quadcopter::pidControl()
+{
+  static const float pParam =  1.0f;
+  static const float iParam =  0.0f;
+  static const float dParam =  0.0f;
+  static const float vParam = -2.0f;
+  int d = m_body;               // to match lua script
+
+  // Vertical control:
+  float targetPos[3], pos[3], vel[3];
+  float error, pv, thrust;
+
+  CHECK(simGetObjectPosition(m_target, -1, targetPos));
+  CHECK(simGetObjectPosition(d, -1, pos));
+  CHECK(simGetObjectVelocity(m_obj, vel, NULL));
+
+  error    = targetPos[2] - pos[2];
+  m_cumul += error;
+  pv       = pParam * error;
+  thrust   = 5.335f + pv + iParam*m_cumul + dParam*(error - m_lastE) + vel[2]*vParam;
+  m_lastE  = error;
+
+  // Horizontal control:
+  float sp[3];
+  float m[12];
+  float vx[3] = { 1.0f, 0.0f, 0.0f };
+  float vy[3] = { 0.0f, 1.0f, 0.0f };
+
+  CHECK(simGetObjectPosition(m_target, d, sp));
+  CHECK(simGetObjectMatrix(d, -1, m));
+  CHECK(simTransformVector(m, vx));
+  CHECK(simTransformVector(m, vy));
+
+  float alphaE    =  vy[2] - m[11];
+  float alphaCorr =  0.25f * alphaE + 2.1f * (alphaE - m_pAlphaE);
+  float betaE     =  vx[2] - m[11];
+  float betaCorr  = -0.25f * betaE  - 2.1f * (betaE  - m_pBetaE);
+
+  m_pAlphaE = alphaE;
+  m_pBetaE  = betaE;
+
+  alphaCorr = alphaCorr + sp[1] * 0.005f + 1.0f * (sp[1] - m_psp1);
+  betaCorr  = betaCorr  - sp[0] * 0.005f - 1.0f * (sp[0] - m_psp0);
+  m_psp0    = sp[0];
+  m_psp1    = sp[1];
+
+  // Rotational control:
+  float rotCorr, euler[3];
+  CHECK(simGetObjectOrientation(d, m_target, euler));
+  rotCorr     = euler[2] * 0.1f + 2.0f * (euler[2] - m_prevEuler);
+  m_prevEuler = euler[2];
+
+  float motorVel[4];
+  motorVel[0] = thrust * (1.0f - alphaCorr + betaCorr + rotCorr);
+  motorVel[1] = thrust * (1.0f - alphaCorr - betaCorr - rotCorr);
+  motorVel[2] = thrust * (1.0f + alphaCorr - betaCorr + rotCorr);
+  motorVel[3] = thrust * (1.0f + alphaCorr + betaCorr - rotCorr);
+
+  setMotorParticleVelocity(0, motorVel[0]);
+  setMotorParticleVelocity(1, motorVel[1]);
+  setMotorParticleVelocity(2, motorVel[2]);
+  setMotorParticleVelocity(3, motorVel[3]);
+}
+
+#undef CHECK
 
 void Quadcopter::simulationStepped()
 {
+  pidControl();
+
+#if 0
   float now = simGetSimulationTime();
+
 
   if (now - m_last_save_time > 1.0f) {
     m_last_save_time = now;
@@ -265,5 +364,5 @@ void Quadcopter::simulationStepped()
       writeCameraPPM(filename, m_cameraDown);
     }
   }
+#endif
 }
-

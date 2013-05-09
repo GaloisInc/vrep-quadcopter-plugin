@@ -24,10 +24,12 @@ DEPS        := $(SOURCES:.cpp=.d)
 all: $(LIB)
 
 $(LIB): $(OBJECTS)
-	$(CXX) $(CXXFLAGS) -shared -o $@ $(OBJECTS)
+	@echo "LINK $@"
+	@$(CXX) $(CXXFLAGS) -shared -o $@ $(OBJECTS)
 
 %.o: %.cpp
-	$(CXX) $(CXXFLAGS) -MMD -c -o $@ $<
+	@echo "CXX $(notdir $<)"
+	@$(CXX) $(CXXFLAGS) -MMD -c -o $@ $<
 
 .PHONY: clean
 clean:

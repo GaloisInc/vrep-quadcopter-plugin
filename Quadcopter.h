@@ -27,9 +27,26 @@ public:
   // Called when the simulation is stepped.
   void simulationStepped();
 
+  // Set the particle velocity for motor "n".
+  void setMotorParticleVelocity(int n, float v);
+
+  // Return the particle velocity for motor "n".  Returns 0.0f if an
+  // error occurs or "n" is out of range.
+  float getMotorParticleVelocity(int n) const;
+
 private:
   // The associated quadcopter object in the scene.
   int m_obj;
+
+  // Unique ID for the quadcopter's base object.
+  int m_uniqueID;
+
+  // The quadcopter body object.
+  int m_body;
+
+  // The quadcopter target object.  This may not be used in the
+  // future.
+  int m_target;
 
   // Object IDs of the quadcopter's four motors.
   int m_motors[4];
@@ -40,6 +57,17 @@ private:
 
   // Timestamp of the last camera image save.
   float m_last_save_time;
+
+  // PID control state.
+  void pidControl();
+
+  float m_cumul;
+  float m_lastE;
+  float m_pAlphaE;
+  float m_pBetaE;
+  float m_psp0;
+  float m_psp1;
+  float m_prevEuler;
 };
 
 #endif   // !defined V_REP_EXT_QUADCOPTER_QUADCOPTER_H_INCLUDED
