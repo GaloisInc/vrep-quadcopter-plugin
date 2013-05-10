@@ -18,6 +18,7 @@
 
 #include "v_repLib.h"
 #include "Container.h"
+#include "PID.h"
 #include "Quadcopter.h"
 
 // Header number for our custom data.
@@ -66,7 +67,7 @@ private:
 };
 
 // Retrieve the "n"th integer argument to a Lua function.  Throws an
-// exception (XXX what type) if the argument is invalid.
+// exception if the argument is invalid.
 int getInputIntArg(SLuaCallBack *p, int n)
 {
   if (p->inputArgCount <= n)
@@ -176,6 +177,7 @@ static void printObjWithLabel(const std::string& name, int obj)
   fprintf(stderr, "\n");
 }
 
+#if 0
 // Write a camera's image data as a PPM image to a file.
 static bool writeCameraPPM(const std::string& filename, int obj)
 {
@@ -212,6 +214,7 @@ static bool writeCameraPPM(const std::string& filename, int obj)
 
   return true;
 }
+#endif
 
 //////////////////////////////////////////////////////////////////////
 // Lua Functions
@@ -353,7 +356,13 @@ bool Quadcopter::init()
 }
 
 Quadcopter::Quadcopter(int obj)
-  : m_obj(obj), m_accelTube(-1), m_gyroTube(-1)
+  : m_obj(obj), m_accelTube(-1), m_gyroTube(-1),
+    m_vertPID     ( 2.0f,   0.0f,  0.0f, -1.0f,  1.0f),
+    m_alphaStabPID( 0.25f,  0.0f,  2.1f, -1.0f,  1.0f),
+    m_alphaMovePID( 0.005f, 0.0f,  1.0f, -1.0f,  1.0f),
+    m_betaStabPID (-0.25f,  0.0f, -2.1f, -10.0f, 10.0f),
+    m_betaMovePID (-0.005f, 0.0f, -1.0f, -10.0f, 10.0f),
+    m_rotPID      ( 0.1f,   0.0f,  2.0f, -1.0f,  1.0f)
 {
   simGetObjectUniqueIdentifier(obj, &m_uniqueID);
 
@@ -382,13 +391,12 @@ Quadcopter::Quadcopter(int obj)
 void Quadcopter::simulationStarted()
 {
   m_last_save_time = 0;
-  m_cumul          = 0.0f;
-  m_lastE          = 0.0f;
-  m_pAlphaE        = 0.0f;
-  m_pBetaE         = 0.0f;
-  m_psp0           = 0.0f;
-  m_psp1           = 0.0f;
-  m_prevEuler      = 0.0f;
+  m_vertPID.reset();
+  m_alphaStabPID.reset();
+  m_alphaMovePID.reset();
+  m_betaStabPID.reset();
+  m_betaMovePID.reset();
+  m_rotPID.reset();
 }
 
 void Quadcopter::simulationStopped()
@@ -469,57 +477,41 @@ bool Quadcopter::readGyroData()
 // target object.
 void Quadcopter::pidControl(float *motors_out)
 {
-  static const float pParam =  2.0f;
-  static const float iParam =  0.0f;
-  static const float dParam =  0.0f;
-  static const float vParam = -2.0f;
   int d = m_body;               // to match lua script
 
   // Vertical control:
   float targetPos[3], pos[3], vel[3];
-  float error, pv, thrust;
+  float thrust;
 
   CHECK(simGetObjectPosition(m_target, -1, targetPos));
   CHECK(simGetObjectPosition(d, -1, pos));
   CHECK(simGetObjectVelocity(m_obj, vel, NULL));
 
-  error    = targetPos[2] - pos[2];
-  m_cumul += error;
-  pv       = pParam * error;
-  thrust   = 5.335f + pv + iParam*m_cumul + dParam*(error - m_lastE) + vel[2]*vParam;
-  m_lastE  = error;
+  // NOTE: The magic number 5.335f is our estimated hover velocity?
+  thrust = (5.335f - vel[2]) + m_vertPID.run(targetPos[2], pos[2]);
 
   // Horizontal control:
-  float sp[3];
   float m[12];
   float vx[3] = { 1.0f, 0.0f, 0.0f };
   float vy[3] = { 0.0f, 1.0f, 0.0f };
 
-  CHECK(simGetObjectPosition(m_target, d, sp));
+  // stabilization:
   CHECK(simGetObjectMatrix(d, -1, m));
   CHECK(simTransformVector(m, vx));
   CHECK(simTransformVector(m, vy));
-
-  // stabilization:
-  float alphaE    =  vy[2] - m[11];
-  float alphaCorr =  0.25f * alphaE + 2.1f * (alphaE - m_pAlphaE);
-  float betaE     =  vx[2] - m[11];
-  float betaCorr  = -0.25f * betaE  - 2.1f * (betaE  - m_pBetaE);
-
-  m_pAlphaE = alphaE;
-  m_pBetaE  = betaE;
+  float alphaCorr = m_alphaStabPID.run(vy[2], m[11]);
+  float betaCorr  = m_betaStabPID.run(vx[2], m[11]);
 
   // move towards target:
-  alphaCorr = alphaCorr + sp[1] * 0.005f + 1.0f * (sp[1] - m_psp1);
-  betaCorr  = betaCorr  - sp[0] * 0.005f - 1.0f * (sp[0] - m_psp0);
-  m_psp0    = sp[0];
-  m_psp1    = sp[1];
+  float sp[3];
+  CHECK(simGetObjectPosition(m_target, d, sp));
+  alphaCorr += m_alphaMovePID.run(sp[1], 0.0f);
+  betaCorr  += m_betaMovePID.run(sp[0], 0.0f);
 
   // Rotational control:
   float rotCorr, euler[3];
   CHECK(simGetObjectOrientation(d, m_target, euler));
-  rotCorr     = euler[2] * 0.1f + 2.0f * (euler[2] - m_prevEuler);
-  m_prevEuler = euler[2];
+  rotCorr = m_rotPID.run(euler[2], 0.0f);
 
   motors_out[0] = thrust * (1.0f - alphaCorr + betaCorr + rotCorr);
   motors_out[1] = thrust * (1.0f - alphaCorr - betaCorr - rotCorr);
@@ -531,8 +523,8 @@ void Quadcopter::pidControl(float *motors_out)
 
 void Quadcopter::simulationStepped()
 {
-  readAccelData();
-  readGyroData();
+  // readAccelData();
+  // readGyroData();
 
 #if 0
   float now = simGetSimulationTime();

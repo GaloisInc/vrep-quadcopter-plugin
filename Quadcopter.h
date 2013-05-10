@@ -9,6 +9,8 @@
 #ifndef V_REP_EXT_QUADCOPTER_QUADCOPTER_H_INCLUDED
 #define V_REP_EXT_QUADCOPTER_QUADCOPTER_H_INCLUDED
 
+#include "PID.h"
+
 class Quadcopter
 {
 public:
@@ -71,13 +73,12 @@ private:
   bool readAccelData();
   bool readGyroData();
 
-  float m_cumul;
-  float m_lastE;
-  float m_pAlphaE;
-  float m_pBetaE;
-  float m_psp0;
-  float m_psp1;
-  float m_prevEuler;
+  PID m_vertPID;
+  PID m_alphaStabPID;
+  PID m_alphaMovePID;
+  PID m_betaStabPID;
+  PID m_betaMovePID;
+  PID m_rotPID;
 };
 
 #endif   // !defined V_REP_EXT_QUADCOPTER_QUADCOPTER_H_INCLUDED

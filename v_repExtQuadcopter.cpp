@@ -128,7 +128,6 @@ void v_repEnd(void)
 // Handle a message from the V-REP simulator.
 void *v_repMessage(int msg, int *adata, void *data, int *reply)
 {
-  static simFloat last_jump_time;
   void *result = NULL;
   int error_mode;
 
@@ -157,38 +156,12 @@ void *v_repMessage(int msg, int *adata, void *data, int *reply)
   if (msg == sim_message_eventcallback_modulehandle) {
     if (data == NULL || !strcasecmp("quadcopter", (char *)data)) {
       g_quadcopters.call(&Quadcopter::simulationStepped);
-
-      simFloat t = simGetSimulationTime();
-      int heli   = simGetObjectHandle("Quadricopter");
-      int target = simGetObjectHandle("Quadricopter_target");
-
-      if (target != -1) {
-        if (t - last_jump_time >= 5.0f) {
-          simFloat pos[3];
-
-          pos[0] = (drand48() - 0.5f) * 2.0f;
-          pos[1] = (drand48() - 0.5f) * 2.0f;
-          pos[2] = drand48() + 1.0f;
-
-          // simSetObjectPosition(target, -1, pos);
-          last_jump_time = t;
-        }
-      }
-
-      if (heli != -1) {
-        simFloat pos[3];
-        if (simGetObjectPosition(heli, -1, pos) != -1) {
-//          fprintf(stderr, "quadcopter: copter at (%.3f, %.3f, %.3f)\n",
-//                  pos[0], pos[1], pos[2]);
-        }
-      }
     }
   }
 
   if (msg == sim_message_eventcallback_moduleclose) {
     if (data == NULL || !strcasecmp("quadcopter", (char *)data)) {
       fprintf(stderr, "quadcopter: simulation stopped\n");
-      last_jump_time = 0;
       g_quadcopters.call(&Quadcopter::simulationStopped);
     }
   }
