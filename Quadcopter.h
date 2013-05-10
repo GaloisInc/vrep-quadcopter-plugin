@@ -15,6 +15,11 @@ public:
   // Return true if a scene object is a quadcopter.
   static bool query(int obj);
 
+  // Perform one-time initialization for the Quadcopter plugin.  This
+  // registers Lua functions with the simulator.  Returns true on
+  // success, false on failure.
+  static bool init();
+
   // Construct a quadcopter from its object ID.
   explicit Quadcopter(int obj);
 
@@ -27,12 +32,12 @@ public:
   // Called when the simulation is stepped.
   void simulationStepped();
 
-  // Set the particle velocity for motor "n".
-  void setMotorParticleVelocity(int n, float v);
+  // Set the accelerometer and gyro tube IDs.
+  void setAccelTube(int id) { m_accelTube = id; }
+  void setGyroTube(int id)  { m_gyroTube  = id; }
 
-  // Return the particle velocity for motor "n".  Returns 0.0f if an
-  // error occurs or "n" is out of range.
-  float getMotorParticleVelocity(int n) const;
+  // Run the PID controller and get the 4 motor velocities.
+  void pidControl(float *motors_out);
 
 private:
   // The associated quadcopter object in the scene.
@@ -55,11 +60,16 @@ private:
   int m_cameraDown;
   int m_cameraFront;
 
+  // Communication tubes for the accelerometer and gyro.
+  int m_accelTube;
+  int m_gyroTube;
+
   // Timestamp of the last camera image save.
   float m_last_save_time;
 
-  // PID control state.
-  void pidControl();
+  // Read data from the accelerometer and gyro sensors.
+  bool readAccelData();
+  bool readGyroData();
 
   float m_cumul;
   float m_lastE;

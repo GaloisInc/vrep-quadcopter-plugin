@@ -8,13 +8,16 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include <deque>
 #include <map>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "v_repLib.h"
+#include "Container.h"
 #include "Quadcopter.h"
 
 // Header number for our custom data.
@@ -46,6 +49,34 @@ typedef std::vector<uint8_t> byte_vector;
 
 // Mapping of field IDs to their data.
 typedef std::map<uint32_t, byte_vector> CustomData;
+
+// Exception thrown when a Lua argument error occurs.
+struct LuaArgException : public std::exception
+{
+  LuaArgException(const std::string& msg)
+    : m_msg(msg) {}
+
+  virtual const char *what() const noexcept(true)
+  {
+    return m_msg.c_str();
+  }
+
+private:
+  std::string m_msg;
+};
+
+// Retrieve the "n"th integer argument to a Lua function.  Throws an
+// exception (XXX what type) if the argument is invalid.
+int getInputIntArg(SLuaCallBack *p, int n)
+{
+  if (p->inputArgCount <= n)
+    throw LuaArgException("not enough arguments");
+
+  if (p->inputArgTypeAndSize[n * 2] != sim_lua_arg_int)
+    throw LuaArgException("wrong argument type");
+
+  return p->inputInt[n];
+}
 
 // Read a little endian integer from an iterator.  If the distance
 // between "start" and "end" is too small, this throws an exception.
@@ -182,8 +213,147 @@ static bool writeCameraPPM(const std::string& filename, int obj)
   return true;
 }
 
+//////////////////////////////////////////////////////////////////////
+// Lua Functions
+
+// FIXME: Need a better way to do this.  It should probably be a
+// static member of "Quadcopter" or something.
+extern GenericContainer<Quadcopter> g_quadcopters;
+
+// Return the four motor velocities for a quadcopter.
+void simExtQuadcopterGetMotorVelocities(SLuaCallBack *p)
+{
+  float motors[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+
+  simLockInterface(1);
+
+  try {
+    int id   = getInputIntArg(p, 0);
+    std::shared_ptr<Quadcopter> qc = g_quadcopters.get(id);
+
+    if (qc) {
+      qc->pidControl(motors);
+    } else {
+      simSetLastError("simExtQuadcopterGetMotorVelocities",
+                      "quadcopter object not found");
+    }
+  } catch (LuaArgException& e) {
+    simSetLastError("simExtQuadcopterGetMotorVelocities", e.what());
+  }
+
+  p->outputArgCount          = 1;
+  p->outputArgTypeAndSize    = (simInt*)simCreateBuffer(2 * sizeof(simInt));
+  p->outputArgTypeAndSize[0] = sim_lua_arg_float|sim_lua_arg_table;
+  p->outputArgTypeAndSize[1] = 4;
+
+  p->outputFloat = (simFloat*)simCreateBuffer(4 * sizeof(simFloat));
+  for (int i = 0; i < 4; ++i)
+    p->outputFloat[i] = motors[i];
+
+  simLockInterface(0);
+}
+
+// Set the tube to read accelerometer data from.
+void simExtQuadcopterSetAccelTube(SLuaCallBack *p)
+{
+  int result = -1;
+
+  simLockInterface(1);
+
+  try {
+    int id   = getInputIntArg(p, 0);
+    int tube = getInputIntArg(p, 1);
+    std::shared_ptr<Quadcopter> qc = g_quadcopters.get(id);
+
+    if (qc) {
+      fprintf(stderr, "setting accel tube for copter %d to %d\n", id, tube);
+      qc->setAccelTube(tube);
+      result = 1;
+    } else {
+      simSetLastError("simExtQuadcopterSetAccelTube",
+                      "quadcopter object not found");
+    }
+  } catch (LuaArgException& e) {
+    simSetLastError("simExtQuadcopterSetAccelTube", e.what());
+  }
+
+  p->outputArgCount          = 1;
+  p->outputArgTypeAndSize    = (simInt*)simCreateBuffer(2 * sizeof(simInt));
+  p->outputArgTypeAndSize[0] = sim_lua_arg_int;
+  p->outputArgTypeAndSize[1] = 1;
+
+  p->outputInt    = (simInt*)simCreateBuffer(sizeof(result));
+  p->outputInt[0] = result;
+
+  simLockInterface(0);
+}
+
+// Set the tube to read gyro data from.
+void simExtQuadcopterSetGyroTube(SLuaCallBack *p)
+{
+  int result = -1;
+
+  simLockInterface(1);
+
+  try {
+    int id   = getInputIntArg(p, 0);
+    int tube = getInputIntArg(p, 1);
+    std::shared_ptr<Quadcopter> qc = g_quadcopters.get(id);
+
+    if (qc) {
+      fprintf(stderr, "setting gyro tube for copter %d to %d\n", id, tube);
+      qc->setGyroTube(tube);
+      result = 1;
+    } else {
+      simSetLastError("simExtQuadcopterSetGyroTube",
+                      "quadcopter object not found");
+    }
+  } catch (LuaArgException& e) {
+    simSetLastError("simExtQuadcopterSetGyroTube", e.what());
+  }
+
+  p->outputArgCount          = 1;
+  p->outputArgTypeAndSize    = (simInt*)simCreateBuffer(2 * sizeof(simInt));
+  p->outputArgTypeAndSize[0] = sim_lua_arg_int;
+  p->outputArgTypeAndSize[1] = 1;
+
+  p->outputInt    = (simInt*)simCreateBuffer(sizeof(result));
+  p->outputInt[0] = result;
+
+  simLockInterface(0);
+}
+
+//////////////////////////////////////////////////////////////////////
+// Quadcopter Methods
+
+bool Quadcopter::init()
+{
+  int args1[] = { 2, sim_lua_arg_int, sim_lua_arg_int };
+  simRegisterCustomLuaFunction(
+    "simExtQuadcopterSetAccelTube",
+    "number result=simExtQuadcopterSetAccelTube("
+    "number quadcopterID, number accelTubeID)",
+    args1, simExtQuadcopterSetAccelTube);
+
+  int args2[] = { 2, sim_lua_arg_int, sim_lua_arg_int };
+  simRegisterCustomLuaFunction(
+    "simExtQuadcopterSetGyroTube",
+    "number result=simExtQuadcopterSetGyroTube("
+    "number quadcopterID, number gyroTubeID)",
+    args2, simExtQuadcopterSetGyroTube);
+
+  int args3[] = { 1, sim_lua_arg_int };
+  simRegisterCustomLuaFunction(
+    "simExtQuadcopterGetMotorVelocities",
+    "table_4 result=simExtQuadcopterGetMotorVelocities("
+    "number quadcopterID)",
+    args3, simExtQuadcopterGetMotorVelocities);
+
+  return true;
+}
+
 Quadcopter::Quadcopter(int obj)
-  : m_obj(obj)
+  : m_obj(obj), m_accelTube(-1), m_gyroTube(-1)
 {
   simGetObjectUniqueIdentifier(obj, &m_uniqueID);
 
@@ -223,48 +393,64 @@ void Quadcopter::simulationStarted()
 
 void Quadcopter::simulationStopped()
 {
+  m_accelTube = -1;
+  m_gyroTube  = -1;
 }
 
-void Quadcopter::setMotorParticleVelocity(int n, float v)
+bool Quadcopter::readAccelData()
 {
-  if (n < 0 || n > 3)
-    return;
+  if (m_accelTube == -1)
+    return false;
 
-  int script = simGetScriptAssociatedWithObject(m_motors[n]);
-  if (script == -1)
-    return;
+  if (simTubeStatus(m_accelTube, NULL, NULL) <= 0) {
+    fprintf(stderr, "accel tube not connected\n");
+    return false;
+  }
 
-  std::string s(std::to_string(v));
-  simSetScriptSimulationParameter(
-    script, "particleVelocity", &s[0], s.size());
+  simInt len;
+  simChar *result = simTubeRead(m_accelTube, &len);
+  if (result == NULL) {
+    fprintf(stderr, "reading from tube %d failed\n", m_accelTube);
+    return false;
+  }
+
+  if (len != 12) {
+    fprintf(stderr, "bad accel data, length %d\n", len);
+    return false;
+  }
+
+  float *data = (float *)result;
+  fprintf(stderr, "accel data: %.3f %.3f %.3f\n", data[0], data[1], data[2]);
+  simReleaseBuffer(result);
+  return true;
 }
 
-float Quadcopter::getMotorParticleVelocity(int n) const
+bool Quadcopter::readGyroData()
 {
-  if (n < 0 || n > 3)
-    return 0.0f;
+  if (m_gyroTube == -1)
+    return false;
 
-  float result = 0.0f;
-  simInt size;
-  int script = simGetScriptAssociatedWithObject(m_motors[n]);
-
-  if (script == -1) {
-    fprintf(stderr, "getting motor script failed\n");
-    return 0.0f;
+  if (simTubeStatus(m_gyroTube, NULL, NULL) <= 0) {
+    fprintf(stderr, "gyro tube not connected\n");
+    return false;
   }
 
-  simChar *r = simGetScriptSimulationParameter(
-    script, "particleVelocity", &size);
-
-  if (r != NULL) {
-    std::string s(r);
-    simReleaseBuffer(r);
-    result = std::stof(s);
-  } else {
-    fprintf(stderr, "getting motor velocity failed\n");
+  simInt len;
+  simChar *result = simTubeRead(m_gyroTube, &len);
+  if (result == NULL) {
+    fprintf(stderr, "reading from tube %d failed\n", m_gyroTube);
+    return false;
   }
 
-  return result;
+  if (len != 12) {
+    fprintf(stderr, "bad gyro data, length %d\n", len);
+    return false;
+  }
+
+  float *data = (float *)result;
+  fprintf(stderr, "gyro data:  %.3f %.3f %.3f\n", data[0], data[1], data[2]);
+  simReleaseBuffer(result);
+  return true;
 }
 
 // Error checking macro for "pidControl".  This wraps calls to the
@@ -281,9 +467,9 @@ float Quadcopter::getMotorParticleVelocity(int n) const
 
 // Ported PID control from the Lua script.  Follows the quadcopter
 // target object.
-void Quadcopter::pidControl()
+void Quadcopter::pidControl(float *motors_out)
 {
-  static const float pParam =  1.0f;
+  static const float pParam =  2.0f;
   static const float iParam =  0.0f;
   static const float dParam =  0.0f;
   static const float vParam = -2.0f;
@@ -314,6 +500,7 @@ void Quadcopter::pidControl()
   CHECK(simTransformVector(m, vx));
   CHECK(simTransformVector(m, vy));
 
+  // stabilization:
   float alphaE    =  vy[2] - m[11];
   float alphaCorr =  0.25f * alphaE + 2.1f * (alphaE - m_pAlphaE);
   float betaE     =  vx[2] - m[11];
@@ -322,6 +509,7 @@ void Quadcopter::pidControl()
   m_pAlphaE = alphaE;
   m_pBetaE  = betaE;
 
+  // move towards target:
   alphaCorr = alphaCorr + sp[1] * 0.005f + 1.0f * (sp[1] - m_psp1);
   betaCorr  = betaCorr  - sp[0] * 0.005f - 1.0f * (sp[0] - m_psp0);
   m_psp0    = sp[0];
@@ -333,23 +521,18 @@ void Quadcopter::pidControl()
   rotCorr     = euler[2] * 0.1f + 2.0f * (euler[2] - m_prevEuler);
   m_prevEuler = euler[2];
 
-  float motorVel[4];
-  motorVel[0] = thrust * (1.0f - alphaCorr + betaCorr + rotCorr);
-  motorVel[1] = thrust * (1.0f - alphaCorr - betaCorr - rotCorr);
-  motorVel[2] = thrust * (1.0f + alphaCorr - betaCorr + rotCorr);
-  motorVel[3] = thrust * (1.0f + alphaCorr + betaCorr - rotCorr);
-
-  setMotorParticleVelocity(0, motorVel[0]);
-  setMotorParticleVelocity(1, motorVel[1]);
-  setMotorParticleVelocity(2, motorVel[2]);
-  setMotorParticleVelocity(3, motorVel[3]);
+  motors_out[0] = thrust * (1.0f - alphaCorr + betaCorr + rotCorr);
+  motors_out[1] = thrust * (1.0f - alphaCorr - betaCorr - rotCorr);
+  motors_out[2] = thrust * (1.0f + alphaCorr - betaCorr + rotCorr);
+  motors_out[3] = thrust * (1.0f + alphaCorr + betaCorr - rotCorr);
 }
 
 #undef CHECK
 
 void Quadcopter::simulationStepped()
 {
-  pidControl();
+  readAccelData();
+  readGyroData();
 
 #if 0
   float now = simGetSimulationTime();

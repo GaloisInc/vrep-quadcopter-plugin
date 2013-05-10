@@ -63,7 +63,7 @@ static std::string get_lib_name()
 static LIBRARY g_vrepLib;
 
 // Container of quadcopters in the scene.
-static GenericContainer<Quadcopter> g_quadcopters;
+GenericContainer<Quadcopter> g_quadcopters;
 
 // Dynamically load and bind V-REP functions from the shared library.
 // Use an environment variable or look in the current directory.
@@ -108,7 +108,7 @@ unsigned char v_repStart(void *p_arg, int i_arg)
   srand48(time(NULL));
 
   simLockInterface(1);
-  // do initialization here
+  Quadcopter::init();
   simLockInterface(0);
 
   return PLUGIN_VERSION;

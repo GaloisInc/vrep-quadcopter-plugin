@@ -78,14 +78,14 @@ public:
   }
 
   // Look up an item by ID, returning NULL if it doesn't exist.
-  std::shared_ptr<Item> get(int id) const
+  std::shared_ptr<Item> get(int id)
   {
     auto i = m_items.find(id);
 
     if (i == m_items.end())
       return std::shared_ptr<Item>();
     else
-      return *i;
+      return i->second;
   }
 
   // Call a member function of each item in the container.  I'm sure
