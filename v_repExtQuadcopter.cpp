@@ -170,7 +170,7 @@ void *v_repMessage(int msg, int *adata, void *data, int *reply)
           pos[1] = (drand48() - 0.5f) * 2.0f;
           pos[2] = drand48() + 1.0f;
 
-          simSetObjectPosition(target, -1, pos);
+          // simSetObjectPosition(target, -1, pos);
           last_jump_time = t;
         }
       }
