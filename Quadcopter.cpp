@@ -20,6 +20,7 @@
 #include "Container.h"
 #include "PID.h"
 #include "Quadcopter.h"
+#include "SimGPS.h"
 
 // Header number for our custom data.
 #define DATA_ID 1000
@@ -521,10 +522,32 @@ void Quadcopter::pidControl(float *motors_out)
 
 #undef CHECK
 
+// GPS simulator configuration.  The UTM origins correspond to the
+// following coordinates:
+//
+//   45d31'15"N 122d40'39"W
+//
+// We generate Gaussian noise with a mean of 0 and a standard
+// deviation of 5 meters.
+static const GPSSimConfig g_gps_sim_config = {
+  10,                           // utmZone
+  true,                         // isNorth
+  525187,                       // originX
+  5040862,                      // originY
+  10,                           // originZ
+  0.0,                          // noiseMean
+  5.0                           // noiseStddev
+};
+
 void Quadcopter::simulationStepped()
 {
   // readAccelData();
   // readGyroData();
+
+  // Output the simulated GPS position for testing.
+  GPSPosition pos(getGPSPosition(m_body, g_gps_sim_config));
+  fprintf(stderr, "%.8f,%.8f,%.8f\n",
+          pos.lat, pos.lon, pos.altitude);
 
 #if 0
   float now = simGetSimulationTime();

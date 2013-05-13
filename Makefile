@@ -14,9 +14,11 @@ DEFINES     := -DPIC -D__linux
 CXXFLAGS    := -std=c++11 -fPIC -Wall -g $(INCLUDES) $(DEFINES)
 
 LIB         := libv_repExtQuadcopter.so
-SOURCES     := Quadcopter.cpp                                  \
-               v_repExtQuadcopter.cpp                              \
+SOURCES     := Quadcopter.cpp           \
+               SimGPS.cpp               \
+               v_repExtQuadcopter.cpp   \
                $(VREP_PREFIX)/programming/common/v_repLib.cpp
+LIBS        := -lGeographic
 
 OBJECTS     := $(SOURCES:.cpp=.o)
 DEPS        := $(SOURCES:.cpp=.d)
@@ -25,7 +27,7 @@ all: $(LIB)
 
 $(LIB): $(OBJECTS)
 	@echo "LINK $@"
-	@$(CXX) $(CXXFLAGS) -shared -o $@ $(OBJECTS)
+	@$(CXX) $(CXXFLAGS) -shared -o $@ $(OBJECTS) $(LIBS)
 
 %.o: %.cpp
 	@echo "CXX $(notdir $<)"
