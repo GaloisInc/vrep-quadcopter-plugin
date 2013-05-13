@@ -70,8 +70,11 @@ private:
   float m_last_save_time;
 
   // Read data from the accelerometer and gyro sensors.
-  bool readAccelData();
-  bool readGyroData();
+  bool readAccelData(float *data_out);
+  bool readGyroData(float *data_out);
+
+  // Log file containing sensor information in CSV format.
+  FILE *m_csvFile;
 
   PID m_vertPID;
   PID m_alphaStabPID;

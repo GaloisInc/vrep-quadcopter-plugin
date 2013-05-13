@@ -398,15 +398,33 @@ void Quadcopter::simulationStarted()
   m_betaStabPID.reset();
   m_betaMovePID.reset();
   m_rotPID.reset();
+
+  char filename[128];
+  snprintf(filename, sizeof(filename),
+           "quadrotor_%d_log.csv", m_obj);
+
+  m_csvFile = fopen(filename, "w");
+
+  if (m_csvFile) {
+    fprintf(stderr, "Logging data to '%s'\n", filename);
+    fprintf(m_csvFile,
+            "quadrotorID,latitude,longitude,altitude,"
+            "accelX,accelY,accelZ,gyroX,gyroY,gyroZ\n");
+  }
 }
 
 void Quadcopter::simulationStopped()
 {
+  if (m_csvFile != nullptr) {
+    fclose(m_csvFile);
+    m_csvFile = nullptr;
+  }
+
   m_accelTube = -1;
   m_gyroTube  = -1;
 }
 
-bool Quadcopter::readAccelData()
+bool Quadcopter::readAccelData(float *data_out)
 {
   if (m_accelTube == -1)
     return false;
@@ -429,12 +447,15 @@ bool Quadcopter::readAccelData()
   }
 
   float *data = (float *)result;
-  fprintf(stderr, "accel data: %.3f %.3f %.3f\n", data[0], data[1], data[2]);
+  data_out[0] = data[0];
+  data_out[1] = data[1];
+  data_out[2] = data[2];
   simReleaseBuffer(result);
+
   return true;
 }
 
-bool Quadcopter::readGyroData()
+bool Quadcopter::readGyroData(float *data_out)
 {
   if (m_gyroTube == -1)
     return false;
@@ -457,8 +478,11 @@ bool Quadcopter::readGyroData()
   }
 
   float *data = (float *)result;
-  fprintf(stderr, "gyro data:  %.3f %.3f %.3f\n", data[0], data[1], data[2]);
+  data_out[0] = data[0];
+  data_out[1] = data[1];
+  data_out[2] = data[2];
   simReleaseBuffer(result);
+
   return true;
 }
 
@@ -528,7 +552,7 @@ void Quadcopter::pidControl(float *motors_out)
 //   45d31'15"N 122d40'39"W
 //
 // We generate Gaussian noise with a mean of 0 and a standard
-// deviation of 5 meters.
+// deviation of 10cm.
 static const GPSSimConfig g_gps_sim_config = {
   10,                           // utmZone
   true,                         // isNorth
@@ -536,22 +560,29 @@ static const GPSSimConfig g_gps_sim_config = {
   5040862,                      // originY
   10,                           // originZ
   0.0,                          // noiseMean
-  5.0                           // noiseStddev
+  0.01,                         // noiseStddev
 };
 
 void Quadcopter::simulationStepped()
 {
-  // readAccelData();
-  // readGyroData();
-
-  // Output the simulated GPS position for testing.
+  // Read simulated sensors and log them to the CSV file.
   GPSPosition pos(getGPSPosition(m_body, g_gps_sim_config));
-  fprintf(stderr, "%.8f,%.8f,%.8f\n",
-          pos.lat, pos.lon, pos.altitude);
+  float accel[3] = { 0.0f, 0.0f, 0.0f };
+  float gyro[3]  = { 0.0f, 0.0f, 0.0f };
+
+  readAccelData(accel);
+  readGyroData(gyro);
+
+  if (m_csvFile) {
+    fprintf(m_csvFile,
+            "%d,%.10f,%.10f,%.10f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
+            m_obj, pos.lat, pos.lon, pos.altitude,
+            accel[0], accel[1], accel[2],
+            gyro[0],  gyro[1],  gyro[2]);
+  }
 
 #if 0
   float now = simGetSimulationTime();
-
 
   if (now - m_last_save_time > 1.0f) {
     m_last_save_time = now;
