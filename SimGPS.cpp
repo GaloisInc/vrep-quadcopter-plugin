@@ -13,18 +13,16 @@
 
 using GeographicLib::UTMUPS;
 
-static std::mt19937 g_gen;
-static bool g_gen_initialized;
-
-GPSPosition getGPSPosition(int obj, const GPSSimConfig& config)
+GPSSimSensor::GPSSimSensor(const GPSSimConfig& config)
+  : m_config(config), m_gen(),
+    m_d(config.noiseMean, config.noiseStddev)
 {
-  // Seed the random generator the first time we are called.
-  if (!g_gen_initialized) {
-    g_gen_initialized = true;
-    std::random_device rd;
-    g_gen.seed(rd());
-  }
+  std::random_device rd;
+  m_gen.seed(rd());
+}
 
+GPSPosition GPSSimSensor::getGPSPosition(int obj)
+{
   GPSPosition result;
   float pos[3];
 
@@ -32,17 +30,16 @@ GPSPosition getGPSPosition(int obj, const GPSSimConfig& config)
     return result;
 
   // Apply noise to the position before converting to lat/lon.
-  std::normal_distribution<> d(config.noiseMean, config.noiseStddev);
-  pos[0] += d(g_gen);
-  pos[1] += d(g_gen);
-  pos[2] += d(g_gen);
+  pos[0] += m_d(m_gen);
+  pos[1] += m_d(m_gen);
+  pos[2] += m_d(m_gen);
 
-  UTMUPS::Reverse(config.zone, config.isNorth,
-                  config.originX + pos[0],
-                  config.originY + pos[1],
+  UTMUPS::Reverse(m_config.zone, m_config.isNorth,
+                  m_config.originX + pos[0],
+                  m_config.originY + pos[1],
                   result.lat, result.lon);
 
-  result.altitude = config.originZ + pos[2];
+  result.altitude = m_config.originZ + pos[2];
 
   return result;
 }

@@ -356,8 +356,26 @@ bool Quadcopter::init()
   return true;
 }
 
+// GPS simulator configuration.  The UTM origins correspond to the
+// following coordinates:
+//
+//   45d31'15"N 122d40'39"W
+//
+// We generate Gaussian noise with a mean of 0 and a standard
+// deviation of 100cm.
+static const GPSSimConfig g_gps_sim_config = {
+  10,                           // utmZone
+  true,                         // isNorth
+  525187,                       // originX
+  5040862,                      // originY
+  10,                           // originZ
+  0.0,                          // noiseMean
+  0.1,                          // noiseStddev
+};
+
 Quadcopter::Quadcopter(int obj)
   : m_obj(obj), m_accelTube(-1), m_gyroTube(-1),
+    m_gps(g_gps_sim_config),
     m_vertPID     ( 2.0f,   0.0f,  0.0f, -1.0f,  1.0f),
     m_alphaStabPID( 0.25f,  0.0f,  2.1f, -1.0f,  1.0f),
     m_alphaMovePID( 0.005f, 0.0f,  1.0f, -1.0f,  1.0f),
@@ -546,27 +564,10 @@ void Quadcopter::pidControl(float *motors_out)
 
 #undef CHECK
 
-// GPS simulator configuration.  The UTM origins correspond to the
-// following coordinates:
-//
-//   45d31'15"N 122d40'39"W
-//
-// We generate Gaussian noise with a mean of 0 and a standard
-// deviation of 10cm.
-static const GPSSimConfig g_gps_sim_config = {
-  10,                           // utmZone
-  true,                         // isNorth
-  525187,                       // originX
-  5040862,                      // originY
-  10,                           // originZ
-  0.0,                          // noiseMean
-  0.01,                         // noiseStddev
-};
-
 void Quadcopter::simulationStepped()
 {
   // Read simulated sensors and log them to the CSV file.
-  GPSPosition pos(getGPSPosition(m_body, g_gps_sim_config));
+  GPSPosition pos(m_gps.getGPSPosition(m_body));
   float accel[3] = { 0.0f, 0.0f, 0.0f };
   float gyro[3]  = { 0.0f, 0.0f, 0.0f };
 

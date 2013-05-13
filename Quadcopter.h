@@ -10,6 +10,7 @@
 #define V_REP_EXT_QUADCOPTER_QUADCOPTER_H_INCLUDED
 
 #include "PID.h"
+#include "SimGPS.h"
 
 class Quadcopter
 {
@@ -75,6 +76,9 @@ private:
 
   // Log file containing sensor information in CSV format.
   FILE *m_csvFile;
+
+  // Simulated GPS sensor.
+  GPSSimSensor m_gps;
 
   PID m_vertPID;
   PID m_alphaStabPID;
