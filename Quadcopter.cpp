@@ -159,11 +159,6 @@ static int searchCustomDataField(int root, uint32_t field)
   return -1;
 }
 
-bool Quadcopter::query(int obj)
-{
-  return hasCustomDataField(obj, FIELD_QUADCOPTER);
-}
-
 // Print an object with a label for debugging.
 static void printObjWithLabel(const std::string& name, int obj)
 {
@@ -220,10 +215,6 @@ static bool writeCameraPPM(const std::string& filename, int obj)
 //////////////////////////////////////////////////////////////////////
 // Lua Functions
 
-// FIXME: Need a better way to do this.  It should probably be a
-// static member of "Quadcopter" or something.
-extern GenericContainer<Quadcopter> g_quadcopters;
-
 // Return the four motor velocities for a quadcopter.
 void simExtQuadcopterGetMotorVelocities(SLuaCallBack *p)
 {
@@ -233,7 +224,7 @@ void simExtQuadcopterGetMotorVelocities(SLuaCallBack *p)
 
   try {
     int id   = getInputIntArg(p, 0);
-    std::shared_ptr<Quadcopter> qc = g_quadcopters.get(id);
+    std::shared_ptr<Quadcopter> qc = Quadcopter::all.get(id);
 
     if (qc) {
       qc->pidControl(motors);
@@ -267,7 +258,7 @@ void simExtQuadcopterSetAccelTube(SLuaCallBack *p)
   try {
     int id   = getInputIntArg(p, 0);
     int tube = getInputIntArg(p, 1);
-    std::shared_ptr<Quadcopter> qc = g_quadcopters.get(id);
+    std::shared_ptr<Quadcopter> qc = Quadcopter::all.get(id);
 
     if (qc) {
       fprintf(stderr, "setting accel tube for copter %d to %d\n", id, tube);
@@ -302,7 +293,7 @@ void simExtQuadcopterSetGyroTube(SLuaCallBack *p)
   try {
     int id   = getInputIntArg(p, 0);
     int tube = getInputIntArg(p, 1);
-    std::shared_ptr<Quadcopter> qc = g_quadcopters.get(id);
+    std::shared_ptr<Quadcopter> qc = Quadcopter::all.get(id);
 
     if (qc) {
       fprintf(stderr, "setting gyro tube for copter %d to %d\n", id, tube);
@@ -329,6 +320,13 @@ void simExtQuadcopterSetGyroTube(SLuaCallBack *p)
 
 //////////////////////////////////////////////////////////////////////
 // Quadcopter Methods
+
+GenericContainer<Quadcopter> Quadcopter::all;
+
+bool Quadcopter::query(int obj)
+{
+  return hasCustomDataField(obj, FIELD_QUADCOPTER);
+}
 
 bool Quadcopter::init()
 {

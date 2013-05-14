@@ -9,12 +9,16 @@
 #ifndef V_REP_EXT_QUADCOPTER_QUADCOPTER_H_INCLUDED
 #define V_REP_EXT_QUADCOPTER_QUADCOPTER_H_INCLUDED
 
+#include "Container.h"
 #include "PID.h"
 #include "SimGPS.h"
 
 class Quadcopter
 {
 public:
+  // Container of all quadcopters in the simulation.
+  static GenericContainer<Quadcopter> all;
+
   // Return true if a scene object is a quadcopter.
   static bool query(int obj);
 

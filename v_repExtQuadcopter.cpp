@@ -62,9 +62,6 @@ static std::string get_lib_name()
 // V-REP library handle we dynamically load.
 static LIBRARY g_vrepLib;
 
-// Container of quadcopters in the scene.
-GenericContainer<Quadcopter> g_quadcopters;
-
 // Dynamically load and bind V-REP functions from the shared library.
 // Use an environment variable or look in the current directory.
 // Returns zero on failure.
@@ -117,7 +114,7 @@ unsigned char v_repStart(void *p_arg, int i_arg)
 // Shut down when the V-REP application is terminating.
 void v_repEnd(void)
 {
-  g_quadcopters.clear();
+  Quadcopter::all.clear();
   unloadVrepLibrary(g_vrepLib);
 }
 
@@ -142,27 +139,27 @@ void *v_repMessage(int msg, int *adata, void *data, int *reply)
 
     if (scene_changed) {
       fprintf(stderr, "quadcopter: scene content changed\n");
-      g_quadcopters.rebuild();
+      Quadcopter::all.rebuild();
     }
   }
 
   if (msg == sim_message_eventcallback_moduleopen) {
     if (data == NULL || !strcasecmp("quadcopter", (char *)data)) {
       fprintf(stderr, "quadcopter: simulation started\n");
-      g_quadcopters.call(&Quadcopter::simulationStarted);
+      Quadcopter::all.call(&Quadcopter::simulationStarted);
     }
   }
 
   if (msg == sim_message_eventcallback_modulehandle) {
     if (data == NULL || !strcasecmp("quadcopter", (char *)data)) {
-      g_quadcopters.call(&Quadcopter::simulationStepped);
+      Quadcopter::all.call(&Quadcopter::simulationStepped);
     }
   }
 
   if (msg == sim_message_eventcallback_moduleclose) {
     if (data == NULL || !strcasecmp("quadcopter", (char *)data)) {
       fprintf(stderr, "quadcopter: simulation stopped\n");
-      g_quadcopters.call(&Quadcopter::simulationStopped);
+      Quadcopter::all.call(&Quadcopter::simulationStopped);
     }
   }
 
