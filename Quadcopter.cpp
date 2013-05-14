@@ -375,12 +375,12 @@ static const GPSSimConfig g_gps_sim_config = {
 Quadcopter::Quadcopter(int obj)
   : m_obj(obj), m_accelTube(-1), m_gyroTube(-1),
     m_gps(g_gps_sim_config),
-    m_vertPID     ( 2.0f,   0.0f,  0.0f, -1.0f,  1.0f),
-    m_alphaStabPID( 0.25f,  0.0f,  2.1f, -1.0f,  1.0f),
-    m_alphaMovePID( 0.005f, 0.0f,  1.0f, -1.0f,  1.0f),
+    m_vertPID     ( 2.0f,   0.0f,  0.0f, -1.0f,   1.0f),
+    m_alphaStabPID( 0.25f,  0.0f,  2.1f, -10.0f, 10.0f),
+    m_alphaMovePID( 0.005f, 0.0f,  1.0f, -10.0f, 10.0f),
     m_betaStabPID (-0.25f,  0.0f, -2.1f, -10.0f, 10.0f),
     m_betaMovePID (-0.005f, 0.0f, -1.0f, -10.0f, 10.0f),
-    m_rotPID      ( 0.1f,   0.0f,  2.0f, -1.0f,  1.0f)
+    m_rotPID      ( 0.1f,   0.0f,  2.0f, -1.0f,   1.0f)
 {
   simGetObjectUniqueIdentifier(obj, &m_uniqueID);
 
