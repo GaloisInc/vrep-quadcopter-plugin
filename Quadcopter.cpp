@@ -173,9 +173,8 @@ static void printObjWithLabel(const std::string& name, int obj)
   fprintf(stderr, "\n");
 }
 
-#if 0
-// Write a camera's image data as a PPM image to a file.
-static bool writeCameraPPM(const std::string& filename, int obj)
+// Write a camera's depth buffer as a PPM image to a file.
+static bool writeCameraDepthPPM(const std::string& filename, int obj)
 {
   simInt size[2];
   simFloat *image;
@@ -187,7 +186,7 @@ static bool writeCameraPPM(const std::string& filename, int obj)
     return false;
   }
 
-  if ((image = simGetVisionSensorImage(obj)) == NULL) {
+  if ((image = simGetVisionSensorDepthBuffer(obj)) == NULL) {
     fprintf(stderr, "getting camera image failed\n");
     return false;
   }
@@ -195,8 +194,11 @@ static bool writeCameraPPM(const std::string& filename, int obj)
   int pixel_size = size[0] * size[1] * 3;
   std::vector<uint8_t> data(pixel_size);
 
-  for (int i = 0; i < pixel_size; ++i)
-    data[i] = (uint8_t)(image[i] * 255.0f);
+  for (int i = 0, j = 0; i < pixel_size; i += 3, j++) {
+    data[i+0] = (uint8_t)(image[j] * 255.0f);
+    data[i+1] = (uint8_t)(image[j] * 255.0f);
+    data[i+2] = (uint8_t)(image[j] * 255.0f);
+  }
 
   FILE *f;
   if ((f = fopen(filename.c_str(), "wb")) == NULL) {
@@ -210,7 +212,6 @@ static bool writeCameraPPM(const std::string& filename, int obj)
 
   return true;
 }
-#endif
 
 //////////////////////////////////////////////////////////////////////
 // Lua Functions
@@ -580,7 +581,6 @@ void Quadcopter::simulationStepped()
             gyro[0],  gyro[1],  gyro[2]);
   }
 
-#if 0
   float now = simGetSimulationTime();
 
   if (now - m_last_save_time > 1.0f) {
@@ -588,9 +588,9 @@ void Quadcopter::simulationStepped()
 
     if (m_cameraDown != -1) {
       char filename[128];
-      snprintf(filename, sizeof(filename), "cam%u_%u.ppm", m_obj, (int)now);
-      writeCameraPPM(filename, m_cameraDown);
+      snprintf(filename, sizeof(filename), "cam%u_%u_depth.ppm",
+               m_obj, (int)now);
+      writeCameraDepthPPM(filename, m_cameraDown);
     }
   }
-#endif
 }
