@@ -20,8 +20,9 @@ SOURCES     := Quadcopter.cpp           \
                $(VREP_PREFIX)/programming/common/v_repLib.cpp
 LIBS        := -lGeographic
 
-OBJECTS     := $(SOURCES:.cpp=.o)
-DEPS        := $(SOURCES:.cpp=.d)
+O           := obj/
+OBJECTS     := $(patsubst %.cpp,$(O)%.o,$(SOURCES))
+DEPS        := $(patsubst %.cpp,$(O)%.d,$(SOURCES))
 
 all: $(LIB)
 
@@ -29,7 +30,8 @@ $(LIB): $(OBJECTS)
 	@echo "LINK $@"
 	@$(CXX) $(CXXFLAGS) -shared -o $@ $(OBJECTS) $(LIBS)
 
-%.o: %.cpp
+$(O)%.o: %.cpp
+	@mkdir -p $(dir $@)
 	@echo "CXX $(notdir $<)"
 	@$(CXX) $(CXXFLAGS) -MMD -c -o $@ $<
 
