@@ -9,7 +9,7 @@
 #ifndef V_REP_EXT_QUADCOPTER_SIM_GPS_H_INCLUDED
 #define V_REP_EXT_QUADCOPTER_SIM_GPS_H_INCLUDED
 
-#include <random>
+#include "Noise.h"
 
 // Position information returned by the simulated GPS.
 struct GPSPosition
@@ -49,8 +49,7 @@ public:
 
 private:
   const GPSSimConfig& m_config;
-  std::mt19937 m_gen;
-  std::normal_distribution<double> m_d;
+  GaussianNoise m_noise;
 };
 
 
