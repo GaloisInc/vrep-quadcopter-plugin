@@ -471,7 +471,7 @@ void Quadcopter::simulationStarted()
   if (m_csvFile) {
     fprintf(stderr, "Logging data to '%s'\n", filename);
     fprintf(m_csvFile,
-            "quadrotorID,latitude,longitude,altitude,"
+            "quadrotorID,time,latitude,longitude,altitude,"
             "accelX,accelY,accelZ,gyroX,gyroY,gyroZ\n");
   }
 }
@@ -556,10 +556,12 @@ void Quadcopter::readSensors()
   readAccelData(m_accel);
   readGyroData(m_gyro);
 
+  float now = simGetSimulationTime();
+
   if (m_csvFile) {
     fprintf(m_csvFile,
-            "%d,%.10f,%.10f,%.10f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
-            m_obj,
+            "%d,%.3f,%.10f,%.10f,%.10f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
+            m_obj, now,
             m_gpsPosition.lat, m_gpsPosition.lon,
             m_gpsPosition.altitude,
             m_accel[0], m_accel[1], m_accel[2],
