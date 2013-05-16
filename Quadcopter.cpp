@@ -173,6 +173,7 @@ static void printObjWithLabel(const std::string& name, int obj)
   fprintf(stderr, "\n");
 }
 
+#if 0
 // Write a camera's depth buffer as a PPM image to a file.
 static bool writeCameraDepthPPM(const std::string& filename, int obj)
 {
@@ -212,9 +213,39 @@ static bool writeCameraDepthPPM(const std::string& filename, int obj)
 
   return true;
 }
+#endif
 
 //////////////////////////////////////////////////////////////////////
 // Lua Functions
+
+// Read sensor state for a quadcopter.
+void simExtQuadcopterReadSensors(SLuaCallBack *p)
+{
+  simLockInterface(1);
+
+  try {
+    int id = getInputIntArg(p, 0);
+    std::shared_ptr<Quadcopter> qc = Quadcopter::all.get(id);
+
+    if (qc) {
+      qc->readSensors();
+    } else {
+      simSetLastError("simExtQuadcopterReadSensors",
+                      "quadcopter object not found");
+    }
+  } catch (LuaArgException& e) {
+    simSetLastError("simExtQuadcopterReadSensors", e.what());
+  }
+
+  p->outputArgCount = 1;
+  p->outputArgTypeAndSize = (simInt*)simCreateBuffer(1 * sizeof(simInt));
+  p->outputArgTypeAndSize[0] = sim_lua_arg_int;
+
+  p->outputInt = (simInt*)simCreateBuffer(1 * sizeof(simInt));
+  p->outputInt[0] = 1;
+
+  simLockInterface(0);
+}
 
 // Return the four motor velocities for a quadcopter.
 void simExtQuadcopterGetMotorVelocities(SLuaCallBack *p)
@@ -352,6 +383,13 @@ bool Quadcopter::init()
     "number quadcopterID)",
     args3, simExtQuadcopterGetMotorVelocities);
 
+  int args4[] = { 1, sim_lua_arg_int };
+  simRegisterCustomLuaFunction(
+    "simExtQuadcopterReadSensors",
+    "number result=simExtQuadcopterReadSensors("
+    "number quadcopterID)",
+    args4, simExtQuadcopterReadSensors);
+
   return true;
 }
 
@@ -415,6 +453,14 @@ void Quadcopter::simulationStarted()
   m_betaStabPID.reset();
   m_betaMovePID.reset();
   m_rotPID.reset();
+
+  m_accel[0] = 0.0f;
+  m_accel[1] = 0.0f;
+  m_accel[2] = 0.0f;
+
+  m_gyro[0] = 0.0f;
+  m_gyro[1] = 0.0f;
+  m_gyro[2] = 0.0f;
 
   char filename[128];
   snprintf(filename, sizeof(filename),
@@ -503,6 +549,24 @@ bool Quadcopter::readGyroData(float *data_out)
   return true;
 }
 
+// Read sensor data into our internal state.
+void Quadcopter::readSensors()
+{
+  m_gpsPosition = m_gps.getGPSPosition(m_body);
+  readAccelData(m_accel);
+  readGyroData(m_gyro);
+
+  if (m_csvFile) {
+    fprintf(m_csvFile,
+            "%d,%.10f,%.10f,%.10f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
+            m_obj,
+            m_gpsPosition.lat, m_gpsPosition.lon,
+            m_gpsPosition.altitude,
+            m_accel[0], m_accel[1], m_accel[2],
+            m_gyro[0],  m_gyro[1],  m_gyro[2]);
+  }
+}
+
 // Error checking macro for "pidControl".  This wraps calls to the
 // V-REP API functions and prints an error message and returns from
 // the current function if an error occurs.
@@ -565,32 +629,4 @@ void Quadcopter::pidControl(float *motors_out)
 
 void Quadcopter::simulationStepped()
 {
-  // Read simulated sensors and log them to the CSV file.
-  GPSPosition pos(m_gps.getGPSPosition(m_body));
-  float accel[3] = { 0.0f, 0.0f, 0.0f };
-  float gyro[3]  = { 0.0f, 0.0f, 0.0f };
-
-  readAccelData(accel);
-  readGyroData(gyro);
-
-  if (m_csvFile) {
-    fprintf(m_csvFile,
-            "%d,%.10f,%.10f,%.10f,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
-            m_obj, pos.lat, pos.lon, pos.altitude,
-            accel[0], accel[1], accel[2],
-            gyro[0],  gyro[1],  gyro[2]);
-  }
-
-  float now = simGetSimulationTime();
-
-  if (now - m_last_save_time > 1.0f) {
-    m_last_save_time = now;
-
-    if (m_cameraDown != -1) {
-      char filename[128];
-      snprintf(filename, sizeof(filename), "cam%u_%u_depth.ppm",
-               m_obj, (int)now);
-      writeCameraDepthPPM(filename, m_cameraDown);
-    }
-  }
 }

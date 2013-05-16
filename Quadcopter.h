@@ -43,6 +43,30 @@ public:
   void setAccelTube(int id) { m_accelTube = id; }
   void setGyroTube(int id)  { m_gyroTube  = id; }
 
+  // Read sensor data from the quadcopter.
+  void readSensors();
+
+  // Place the (x, y, z) values (in m/sec^2 XXX verify) of the latest
+  // accelerometer reading into "out".
+  void getAccel(float *out)
+  {
+    out[0] = m_accel[0];
+    out[1] = m_accel[1];
+    out[2] = m_accel[2];
+  }
+
+  // Place the (x, y, z) values (in rad/sec XXX verify) of the latest
+  // gyro reading into "out".
+  void getGyro(float *out)
+  {
+    out[0] = m_gyro[0];
+    out[1] = m_gyro[1];
+    out[2] = m_gyro[2];
+  }
+
+  // Return the latest GPS position.
+  GPSPosition getGPSPosition() const { return m_gpsPosition; }
+
   // Run the PID controller and get the 4 motor velocities.
   void pidControl(float *motors_out);
 
@@ -73,6 +97,11 @@ private:
 
   // Timestamp of the last camera image save.
   float m_last_save_time;
+
+  // Latest sensor readings, recorded in "readSensors".
+  float m_accel[3];
+  float m_gyro[3];
+  GPSPosition m_gpsPosition;
 
   // Read data from the accelerometer and gyro sensors.
   bool readAccelData(float *data_out);
