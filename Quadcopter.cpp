@@ -446,7 +446,7 @@ Quadcopter::Quadcopter(int obj)
 
 void Quadcopter::simulationStarted()
 {
-  m_last_save_time = 0;
+  m_lastSaveTime = 0;
   m_vertPID.reset();
   m_alphaStabPID.reset();
   m_alphaMovePID.reset();

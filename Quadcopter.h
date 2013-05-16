@@ -96,7 +96,7 @@ private:
   int m_gyroTube;
 
   // Timestamp of the last camera image save.
-  float m_last_save_time;
+  float m_lastSaveTime;
 
   // Latest sensor readings, recorded in "readSensors".
   float m_accel[3];
