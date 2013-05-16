@@ -39,29 +39,42 @@ public:
   // Called when the simulation is stepped.
   void simulationStepped();
 
-  // Set the accelerometer and gyro tube IDs.
-  void setAccelTube(int id) { m_accelTube = id; }
-  void setGyroTube(int id)  { m_gyroTube  = id; }
-
   // Read sensor data from the quadcopter.
   void readSensors();
 
   // Place the (x, y, z) values (in m/sec^2 XXX verify) of the latest
   // accelerometer reading into "out".
-  void getAccel(float *out)
+  void getAccel(float *out) const
   {
     out[0] = m_accel[0];
     out[1] = m_accel[1];
     out[2] = m_accel[2];
   }
 
+  // Set the accelerometer data.  Called by the simulator from a Lua
+  // function.
+  void setAccel(float *accel)
+  {
+    m_accel[0] = accel[0];
+    m_accel[1] = accel[1];
+    m_accel[2] = accel[2];
+  }
+
   // Place the (x, y, z) values (in rad/sec XXX verify) of the latest
   // gyro reading into "out".
-  void getGyro(float *out)
+  void getGyro(float *out) const
   {
     out[0] = m_gyro[0];
     out[1] = m_gyro[1];
     out[2] = m_gyro[2];
+  }
+
+  // Set the gyro data.  Called by the simulator from a Lua function.
+  void setGyro(float *gyro)
+  {
+    m_gyro[0] = gyro[0];
+    m_gyro[1] = gyro[1];
+    m_gyro[2] = gyro[2];
   }
 
   // Return the latest GPS position.
@@ -91,10 +104,6 @@ private:
   int m_cameraDown;
   int m_cameraFront;
 
-  // Communication tubes for the accelerometer and gyro.
-  int m_accelTube;
-  int m_gyroTube;
-
   // Timestamp of the last camera image save.
   float m_lastSaveTime;
 
@@ -102,10 +111,6 @@ private:
   float m_accel[3];
   float m_gyro[3];
   GPSPosition m_gpsPosition;
-
-  // Read data from the accelerometer and gyro sensors.
-  bool readAccelData(float *data_out);
-  bool readGyroData(float *data_out);
 
   // Log file containing sensor information in CSV format.
   FILE *m_csvFile;

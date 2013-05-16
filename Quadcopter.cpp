@@ -290,28 +290,35 @@ void simExtQuadcopterGetMotorVelocities(SLuaCallBack *p)
   simLockInterface(0);
 }
 
-// Set the tube to read accelerometer data from.
-void simExtQuadcopterSetAccelTube(SLuaCallBack *p)
+// Set the accelerometer data for a quadcopter.
+void simExtQuadcopterSetAccelData(SLuaCallBack *p)
 {
   int result = -1;
 
   simLockInterface(1);
 
   try {
-    int id   = getInputIntArg(p, 0);
-    int tube = getInputIntArg(p, 1);
+    if (p->inputArgCount != 2)
+      throw LuaArgException("wrong number of arguments");
+    if (p->inputArgTypeAndSize[0 * 2 + 0] != sim_lua_arg_int)
+      throw LuaArgException("wrong argument type");
+    if (p->inputArgTypeAndSize[1 * 2 + 0] != (sim_lua_arg_float|sim_lua_arg_table))
+      throw LuaArgException("wrong argument type");
+    if (p->inputArgTypeAndSize[1 * 2 + 1] != 3)
+      throw LuaArgException("wrong argument table size");
+
+    int id = p->inputInt[0];
     std::shared_ptr<Quadcopter> qc = Quadcopter::all.get(id);
 
     if (qc) {
-      fprintf(stderr, "setting accel tube for copter %d to %d\n", id, tube);
-      qc->setAccelTube(tube);
+      qc->setAccel(&p->inputFloat[0]);
       result = 1;
     } else {
-      simSetLastError("simExtQuadcopterSetAccelTube",
+      simSetLastError("simExtQuadcopterSetAccelData",
                       "quadcopter object not found");
     }
   } catch (LuaArgException& e) {
-    simSetLastError("simExtQuadcopterSetAccelTube", e.what());
+    simSetLastError("simExtQuadcopterSetAccelData", e.what());
   }
 
   p->outputArgCount          = 1;
@@ -325,28 +332,35 @@ void simExtQuadcopterSetAccelTube(SLuaCallBack *p)
   simLockInterface(0);
 }
 
-// Set the tube to read gyro data from.
-void simExtQuadcopterSetGyroTube(SLuaCallBack *p)
+// Set the gyro data for a quadcopter.
+void simExtQuadcopterSetGyroData(SLuaCallBack *p)
 {
   int result = -1;
 
   simLockInterface(1);
 
   try {
-    int id   = getInputIntArg(p, 0);
-    int tube = getInputIntArg(p, 1);
+    if (p->inputArgCount != 2)
+      throw LuaArgException("wrong number of arguments");
+    if (p->inputArgTypeAndSize[0 * 2 + 0] != sim_lua_arg_int)
+      throw LuaArgException("wrong argument type");
+    if (p->inputArgTypeAndSize[1 * 2 + 0] != (sim_lua_arg_float|sim_lua_arg_table))
+      throw LuaArgException("wrong argument type");
+    if (p->inputArgTypeAndSize[1 * 2 + 1] != 3)
+      throw LuaArgException("wrong argument table size");
+
+    int id = p->inputInt[0];
     std::shared_ptr<Quadcopter> qc = Quadcopter::all.get(id);
 
     if (qc) {
-      fprintf(stderr, "setting gyro tube for copter %d to %d\n", id, tube);
-      qc->setGyroTube(tube);
+      qc->setGyro(&p->inputFloat[0]);
       result = 1;
     } else {
-      simSetLastError("simExtQuadcopterSetGyroTube",
+      simSetLastError("simExtQuadcopterSetGyroData",
                       "quadcopter object not found");
     }
   } catch (LuaArgException& e) {
-    simSetLastError("simExtQuadcopterSetGyroTube", e.what());
+    simSetLastError("simExtQuadcopterSetGyroData", e.what());
   }
 
   p->outputArgCount          = 1;
@@ -372,33 +386,33 @@ bool Quadcopter::query(int obj)
 
 bool Quadcopter::init()
 {
-  int args1[] = { 2, sim_lua_arg_int, sim_lua_arg_int };
-  simRegisterCustomLuaFunction(
-    "simExtQuadcopterSetAccelTube",
-    "number result=simExtQuadcopterSetAccelTube("
-    "number quadcopterID, number accelTubeID)",
-    args1, simExtQuadcopterSetAccelTube);
-
-  int args2[] = { 2, sim_lua_arg_int, sim_lua_arg_int };
-  simRegisterCustomLuaFunction(
-    "simExtQuadcopterSetGyroTube",
-    "number result=simExtQuadcopterSetGyroTube("
-    "number quadcopterID, number gyroTubeID)",
-    args2, simExtQuadcopterSetGyroTube);
-
-  int args3[] = { 1, sim_lua_arg_int };
+  int args1[] = { 1, sim_lua_arg_int };
   simRegisterCustomLuaFunction(
     "simExtQuadcopterGetMotorVelocities",
     "table_4 result=simExtQuadcopterGetMotorVelocities("
     "number quadcopterID)",
-    args3, simExtQuadcopterGetMotorVelocities);
+    args1, simExtQuadcopterGetMotorVelocities);
 
-  int args4[] = { 1, sim_lua_arg_int };
+  int args2[] = { 1, sim_lua_arg_int };
   simRegisterCustomLuaFunction(
     "simExtQuadcopterReadSensors",
     "number result=simExtQuadcopterReadSensors("
     "number quadcopterID)",
-    args4, simExtQuadcopterReadSensors);
+    args2, simExtQuadcopterReadSensors);
+
+  int args3[] = { 2, sim_lua_arg_int, sim_lua_arg_float|sim_lua_arg_table };
+  simRegisterCustomLuaFunction(
+    "simExtQuadcopterSetAccelData",
+    "number result=simExtQuadcopterSetAccelData("
+    "number quadcopterID, table_3 data)",
+    args3, simExtQuadcopterSetAccelData);
+
+  int args4[] = { 2, sim_lua_arg_int, sim_lua_arg_float|sim_lua_arg_table };
+  simRegisterCustomLuaFunction(
+    "simExtQuadcopterSetGyroData",
+    "number result=simExtQuadcopterSetGyroData("
+    "number quadcopterID, table_3 data)",
+    args4, simExtQuadcopterSetGyroData);
 
   return true;
 }
@@ -421,7 +435,7 @@ static const GPSSimConfig g_gps_sim_config = {
 };
 
 Quadcopter::Quadcopter(int obj)
-  : m_obj(obj), m_accelTube(-1), m_gyroTube(-1),
+  : m_obj(obj),
     m_gps(g_gps_sim_config),
     m_vertPID     ( 2.0f,   0.0f,  0.0f, -1.0f,   1.0f),
     m_alphaStabPID( 0.25f,  0.0f,  2.1f, -10.0f, 10.0f),
@@ -492,79 +506,12 @@ void Quadcopter::simulationStopped()
     fclose(m_csvFile);
     m_csvFile = nullptr;
   }
-
-  m_accelTube = -1;
-  m_gyroTube  = -1;
-}
-
-bool Quadcopter::readAccelData(float *data_out)
-{
-  if (m_accelTube == -1)
-    return false;
-
-  if (simTubeStatus(m_accelTube, NULL, NULL) <= 0) {
-    fprintf(stderr, "accel tube not connected\n");
-    return false;
-  }
-
-  simInt len;
-  simChar *result = simTubeRead(m_accelTube, &len);
-  if (result == NULL) {
-    fprintf(stderr, "reading from tube %d failed\n", m_accelTube);
-    return false;
-  }
-
-  if (len != 12) {
-    fprintf(stderr, "bad accel data, length %d\n", len);
-    return false;
-  }
-
-  float *data = (float *)result;
-  data_out[0] = data[0];
-  data_out[1] = data[1];
-  data_out[2] = data[2];
-  simReleaseBuffer(result);
-
-  return true;
-}
-
-bool Quadcopter::readGyroData(float *data_out)
-{
-  if (m_gyroTube == -1)
-    return false;
-
-  if (simTubeStatus(m_gyroTube, NULL, NULL) <= 0) {
-    fprintf(stderr, "gyro tube not connected\n");
-    return false;
-  }
-
-  simInt len;
-  simChar *result = simTubeRead(m_gyroTube, &len);
-  if (result == NULL) {
-    fprintf(stderr, "reading from tube %d failed\n", m_gyroTube);
-    return false;
-  }
-
-  if (len != 12) {
-    fprintf(stderr, "bad gyro data, length %d\n", len);
-    return false;
-  }
-
-  float *data = (float *)result;
-  data_out[0] = data[0];
-  data_out[1] = data[1];
-  data_out[2] = data[2];
-  simReleaseBuffer(result);
-
-  return true;
 }
 
 // Read sensor data into our internal state.
 void Quadcopter::readSensors()
 {
   m_gpsPosition = m_gps.getGPSPosition(m_body);
-  readAccelData(m_accel);
-  readGyroData(m_gyro);
 
   float now = simGetSimulationTime();
 
