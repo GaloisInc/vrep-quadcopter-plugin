@@ -71,13 +71,23 @@ private:
 // exception if the argument is invalid.
 int getInputIntArg(SLuaCallBack *p, int n)
 {
+  int argN, i;
+
   if (p->inputArgCount <= n)
     throw LuaArgException("not enough arguments");
 
-  if (p->inputArgTypeAndSize[n * 2] != sim_lua_arg_int)
-    throw LuaArgException("wrong argument type");
+  // Count how many integer arguments precede the "n"th argument.
+  for (i = 0, argN = 0; i < n; ++i) {
+    if (p->inputArgTypeAndSize[i * 2] == sim_lua_arg_int) {
+      ++argN;
+    }
+  }
 
-  return p->inputInt[n];
+  if (p->inputArgTypeAndSize[n * 2] == sim_lua_arg_int) {
+    return p->inputInt[argN];
+  } else {
+    throw LuaArgException("wrong argument type");
+  }
 }
 
 // Read a little endian integer from an iterator.  If the distance
